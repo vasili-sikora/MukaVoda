@@ -15,7 +15,7 @@ class OrderForm(ChildForm):
         self.db = DatabaseManager()
         self.result: Optional[Order] = None
         self.items: List[OrderItem] = []
-        self.editing_order = order  # Сохраняем заказ для редактирования
+        self.editing_order = order
 
         if order:
             self.dialog.title(f"Изменить заказ {order.order_number}")
@@ -24,29 +24,12 @@ class OrderForm(ChildForm):
 
         self.create_widgets()
 
-        # Если редактируем - загружаем данные
         if order:
             self.load_order_data(order)
 
-        self.center_window()
-
-    def center_window(self):
-        """Центрирует окно на экране"""
-        self.dialog.update_idletasks()
-        width = self.dialog.winfo_width()
-        height = self.dialog.winfo_height()
-        x = (self.dialog.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.dialog.winfo_screenheight() // 2) - (height // 2)
-        self.dialog.geometry(f"{width}x{height}+{x}+{y}")
-
     def create_widgets(self):
-        """Создает виджеты формы"""
-
-        # ====================================================================
-        # ЗАГОЛОВОК
-        # ====================================================================
         title_text = (
-            "Изменение заказа" if self.editing_order else "➕ Создание нового заказа"
+            "Изменение заказа" if self.editing_order else "Создание нового заказа"
         )
         bg_color = "#e67e22" if self.editing_order else "#3498db"
 
@@ -60,15 +43,9 @@ class OrderForm(ChildForm):
         )
         header.pack(fill=tk.X)
 
-        # ====================================================================
-        # ОСНОВНОЙ КОНТЕЙНЕР
-        # ====================================================================
         main_frame = tk.Frame(self.dialog, padx=20, pady=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # ====================================================================
-        # ЛЕВАЯ ПАНЕЛЬ - Меню (дерево категорий)
-        # ====================================================================
         left_frame = tk.Frame(main_frame)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
@@ -76,7 +53,6 @@ class OrderForm(ChildForm):
             anchor=tk.W, pady=(0, 5)
         )
 
-        # Дерево меню: Категория -> Блюда
         menu_frame = tk.Frame(left_frame)
         menu_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
@@ -122,10 +98,9 @@ class OrderForm(ChildForm):
         )
         self.qty_spinbox.pack(anchor=tk.W, pady=(5, 0))
 
-        # Кнопка добавить
         self.btn_add_item = tk.Button(
             left_frame,
-            text="➕ Добавить в заказ",
+            text="Добавить в заказ",
             font=("Arial", 11, "bold"),
             bg="#27ae60",
             fg="white",
@@ -134,9 +109,6 @@ class OrderForm(ChildForm):
         )
         self.btn_add_item.pack(fill=tk.X, pady=(15, 0))
 
-        # ====================================================================
-        # ПРАВАЯ ПАНЕЛЬ - Текущий заказ
-        # ====================================================================
         right_frame = tk.Frame(main_frame)
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
 
@@ -158,7 +130,7 @@ class OrderForm(ChildForm):
 
         self.btn_remove_item = tk.Button(
             right_frame,
-            text="🗑️ Удалить позицию",
+            text="Удалить позицию",
             font=("Arial", 10),
             bg="#e74c3c",
             fg="white",
@@ -176,9 +148,6 @@ class OrderForm(ChildForm):
         )
         self.total_label.pack(pady=(15, 0))
 
-        # ====================================================================
-        # НИЖНИЙ КОНТЕЙНЕР (детали + кнопки) — чтобы кнопка не пропадала
-        # ====================================================================
         bottom_container = tk.Frame(self.dialog, bg="#ecf0f1")
         bottom_container.pack(fill=tk.X, side=tk.BOTTOM)
 
@@ -190,9 +159,6 @@ class OrderForm(ChildForm):
 
         bottom_container.columnconfigure(0, weight=1)
 
-        # ====================================================================
-        # НИЖНЯЯ ПАНЕЛЬ - Детали заказа (в bottom_frame)
-        # ====================================================================
         payment_frame = tk.Frame(bottom_frame, bg="#ecf0f1")
         payment_frame.pack(side=tk.LEFT, fill=tk.Y)
 
@@ -273,12 +239,9 @@ class OrderForm(ChildForm):
             fg="#7f8c8d",
         ).pack(anchor=tk.W)
 
-        # ====================================================================
-        # КНОПКИ (в button_frame)
-        # ====================================================================
         tk.Button(
             button_frame,
-            text="❌ Отмена",
+            text="Отмена",
             font=("Arial", 11),
             bg="#95a5a6",
             fg="white",
@@ -289,9 +252,7 @@ class OrderForm(ChildForm):
 
         self.btn_save = tk.Button(
             button_frame,
-            text="✅ Создать заказ"
-            if not self.editing_order
-            else "✅ Сохранить изменения",
+            text="Создать заказ" if not self.editing_order else "Сохранить изменения",
             font=("Arial", 11, "bold"),
             bg="#27ae60",
             fg="white",
@@ -302,11 +263,9 @@ class OrderForm(ChildForm):
         )
         self.btn_save.pack(side=tk.RIGHT)
 
-        # Обработчик выбора в списке
         self.items_listbox.bind("<<ListboxSelect>>", self.on_item_select)
 
     def set_current_day(self):
-        """Устанавливает текущее время в поле времени выдачи"""
         current = datetime.now().strftime("%Y-%m-%d")
         self.completion_entry.delete(0, tk.END)
         self.completion_entry.insert(0, current)
@@ -317,7 +276,6 @@ class OrderForm(ChildForm):
         self.completion_entry.insert(0, tomorrow)
 
     def add_item(self):
-        """Добавляет выбранное блюдо в заказ"""
         if not self.selected_menu:
             messagebox.showwarning(
                 "Выберите блюдо", "Выберите блюдо (не категорию) в меню слева"
@@ -346,7 +304,6 @@ class OrderForm(ChildForm):
         self.items.append(item)
         self.update_items_display()
 
-        # сброс выбора/количества
         self.menu_tree.selection_remove(self.menu_tree.selection())
         self.selected_menu = None
         self.qty_spinbox.delete(0, tk.END)
@@ -355,36 +312,27 @@ class OrderForm(ChildForm):
         self.btn_save.config(state=tk.NORMAL)
 
     def remove_item(self):
-        """Удаляет выбранную позицию из заказа"""
         selection = self.items_listbox.curselection()
         if not selection:
             return
 
         index = selection[0]
 
-        # Удаляем из списка
         del self.items[index]
 
-        # Обновляем отображение
         self.update_items_display()
-
-        # Если заказ пустой, отключаем кнопку сохранения
         if not self.items:
             self.btn_save.config(state=tk.DISABLED)
 
     def update_items_display(self):
-        """Обновляет отображение списка позиций"""
-        # Очищаем listbox
         self.items_listbox.delete(0, tk.END)
 
-        # Добавляем все позиции
         for item in self.items:
             display_text = (
                 f"{item.name} x{item.quantity}  {item.calculate_total():.2f} BYN"
             )
             self.items_listbox.insert(tk.END, display_text)
 
-        # Обновляем итоговую сумму
         total = sum(item.calculate_total() for item in self.items)
         self.total_label.config(text=f"ИТОГО: {total:.2f} BYN")
 
@@ -396,25 +344,21 @@ class OrderForm(ChildForm):
             self.btn_remove_item.config(state=tk.DISABLED)
 
     def save(self):
-        """Сохраняет заказ"""
-        # Проверяем, есть ли позиции
         if not self.items:
             messagebox.showwarning(
                 "Пустой заказ", "Добавьте хотя бы одну позицию в заказ"
             )
             return
 
-        # Получаем способ оплаты
+        if not self.completion_entry.get():
+            messagebox.showwarning("Пустое время выдачи", "Введите время выдачи заказа")
+            return
+
         payment_method = self.payment_var.get()
 
-        # Получаем адрес доставки
         address = self.address_entry.get().strip()
         delivery_address = address if address else None
-
-        # Получаем время выдачи
         completion_time = self.completion_entry.get().strip()
-
-        # Валидация формата времени (если заполнено)
         if completion_time:
             try:
                 datetime.strptime(completion_time, "%Y-%m-%d %H:%M")
@@ -425,16 +369,13 @@ class OrderForm(ChildForm):
                 )
                 return
 
-        # Создаем или обновляем заказ
         if self.editing_order:
-            # Режим редактирования
             self.editing_order.items = self.items.copy()
             self.editing_order.payment_method = payment_method
             self.editing_order.delivery_adress = delivery_address
             self.editing_order.completed_at = completion_time
             self.result = self.editing_order
         else:
-            # Режим создания
             order = Order(
                 order_id=None,
                 order_number=None,
@@ -449,23 +390,14 @@ class OrderForm(ChildForm):
         self.dialog.destroy()
 
     def cancel(self):
-        """Отменяет создание заказа"""
         self.result = None
         self.dialog.destroy()
 
     def show(self) -> Optional[Order]:
-        """
-        Показывает форму и ждет результата.
-
-        Возвращает:
-            Order или None если отменено
-        """
         self.dialog.wait_window()
         return self.result
 
     def load_order_data(self, order: Order):
-        """Загружает данные заказа для редактирования"""
-        # Загружаем позиции
         self.items = order.items.copy()
         self.update_items_display()
 
@@ -485,14 +417,10 @@ class OrderForm(ChildForm):
             self.btn_save.config(state=tk.NORMAL)
 
     def load_menu_tree(self):
-        """Заполняет дерево меню из БД: категории (родители) -> блюда (дети)."""
-        # очистка дерева
         for iid in self.menu_tree.get_children():
             self.menu_tree.delete(iid)
 
-        # category -> parent iid
         cat_nodes: dict[str, str] = {}
-        # dish iid -> объект MenuItem (из БД)
         self._dish_by_iid = {}
 
         menu_items = self.db.get_menu()
@@ -505,7 +433,7 @@ class OrderForm(ChildForm):
                     "end",
                     text=mi.category,
                     values=("",),
-                    open=False,  # категории свернуты по умолчанию
+                    open=False,
                 )
                 cat_nodes[mi.category] = cat_iid
 
@@ -523,4 +451,4 @@ class OrderForm(ChildForm):
             self.selected_menu = None
             return
         iid = sel[0]
-        self.selected_menu = self._dish_by_iid.get(iid)  # None если клик по категории
+        self.selected_menu = self._dish_by_iid.get(iid)

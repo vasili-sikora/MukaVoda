@@ -123,7 +123,6 @@ class MenuForm(ChildForm):
                 )
             )
         except sqlite3.IntegrityError as e:
-            # например, если нарушили UNIQUE (дубликат)
             messagebox.showerror("Ошибка", f"Не удалось добавить позицию:\n{e}")
             return
 
@@ -155,7 +154,6 @@ class MenuForm(ChildForm):
         iid = selected[0]
         old_name, old_category, old_price = self.menu_table.item(iid, "values")
 
-        # Ввод новых значений (с предзаполнением)
         new_name = simpledialog.askstring(
             "Редактирование", "Название:", initialvalue=old_name, parent=self.dialog
         )
