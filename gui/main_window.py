@@ -168,16 +168,13 @@ class MainWindow:
         self.status_label.pack(fill=tk.X, padx=10, pady=5)
 
     def refresh_orders(self):
-        """Обновляет список заказов из БД"""
         for item in self.tree.get_children():
             self.tree.delete(item)
 
         orders = self.db.get_all_orders(limit=100)
 
         for order in orders:
-            delivery = (
-                order.delivery_adress if order.delivery_adress else "🏪 Самовывоз"
-            )
+            delivery = order.delivery_adress if order.delivery_adress else "Самовывоз"
 
             completion = order.completed_at if order.completed_at else "—"
 

@@ -1,15 +1,15 @@
 import sqlite3
 import tkinter as tk
-from datetime import datetime
 from tkinter import messagebox, simpledialog, ttk
-from typing import List, Optional
 
 from database.database import DatabaseManager
-from database.models import MenuItem, Order, OrderItem
+from database.models import MenuItem
 from gui.child_form import ChildForm
 
 
 class MenuForm(ChildForm):
+    CATEGORIES = ["Пицца", "Хот-дог", "Закуски", "Соусы", "Напитки"]
+
     def __init__(self, parent):
         super().__init__(parent)
         self.db = DatabaseManager()
@@ -47,12 +47,10 @@ class MenuForm(ChildForm):
             height=12,
         )
 
-        # Заголовки
         self.menu_table.heading("name", text="Название")
         self.menu_table.heading("category", text="Категория")
         self.menu_table.heading("price", text="Цена")
 
-        # Ширины и выравнивание
         self.menu_table.column("name", width=250, anchor="w")
         self.menu_table.column("category", width=160, anchor="w")
         self.menu_table.column("price", width=90, anchor="e")
@@ -102,24 +100,16 @@ class MenuForm(ChildForm):
             )
 
     def add_menu_item(self):
-        name = simpledialog.askstring("Добавить", "Название:", parent=self.dialog)
-        if not name:
-            return
-
-        category = simpledialog.askstring("Добавить", "Категория:", parent=self.dialog)
-        if not category:
-            return
-
-        price = simpledialog.askfloat(
-            "Добавить", "Цена:", parent=self.dialog, minvalue=0.01
-        )
-        if price is None:
+        res = self._open_item_dialog("Добавить позицию")
+        if not res["ok"]:
             return
 
         try:
             self.db.add_to_menu(
                 MenuItem(
-                    name=name.strip(), category=category.strip(), price=float(price)
+                    name=res["name"],
+                    category=res["category"],
+                    price=res["price"],
                 )
             )
         except sqlite3.IntegrityError as e:
@@ -154,38 +144,22 @@ class MenuForm(ChildForm):
         iid = selected[0]
         old_name, old_category, old_price = self.menu_table.item(iid, "values")
 
-        new_name = simpledialog.askstring(
-            "Редактирование", "Название:", initialvalue=old_name, parent=self.dialog
+        res = self._open_item_dialog(
+            "Редактировать позицию",
+            name=old_name,
+            category=old_category,
+            price=float(old_price),
         )
-        if new_name is None or not new_name.strip():
-            return
-
-        new_category = simpledialog.askstring(
-            "Редактирование",
-            "Категория:",
-            initialvalue=old_category,
-            parent=self.dialog,
-        )
-        if new_category is None or not new_category.strip():
-            return
-
-        new_price = simpledialog.askfloat(
-            "Редактирование",
-            "Цена:",
-            initialvalue=float(old_price),
-            minvalue=0.01,
-            parent=self.dialog,
-        )
-        if new_price is None:
+        if not res["ok"]:
             return
 
         try:
             self.db.update_menu_item(
                 old_name=old_name,
                 menu_item=MenuItem(
-                    name=new_name.strip(),
-                    category=new_category.strip(),
-                    price=float(new_price),
+                    name=res["name"],
+                    category=res["category"],
+                    price=res["price"],
                 ),
             )
         except sqlite3.IntegrityError as e:
@@ -193,3 +167,87 @@ class MenuForm(ChildForm):
             return
 
         self.refresh_table()
+
+    def _open_item_dialog(
+        self,
+        title: str,
+        name: str = "",
+        category: str = "Пицца",
+        price: float | None = None,
+    ):
+        dlg = tk.Toplevel(self.dialog)
+        dlg.title(title)
+        dlg.transient(self.dialog)
+        dlg.grab_set()
+
+        frm = tk.Frame(dlg, padx=12, pady=12)
+        frm.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frm, text="Название:").grid(row=0, column=0, sticky="w")
+        name_var = tk.StringVar(value=name)
+        name_entry = tk.Entry(frm, textvariable=name_var, width=30)
+        name_entry.grid(row=0, column=1, sticky="ew", pady=4)
+
+        tk.Label(frm, text="Категория:").grid(row=1, column=0, sticky="w")
+        cat_var = tk.StringVar(
+            value=category if category in self.CATEGORIES else self.CATEGORIES[0]
+        )
+        cat_combo = ttk.Combobox(
+            frm, textvariable=cat_var, values=self.CATEGORIES, state="readonly"
+        )
+        cat_combo.grid(row=1, column=1, sticky="ew", pady=4)
+
+        tk.Label(frm, text="Цена:").grid(row=2, column=0, sticky="w")
+        price_var = tk.StringVar(value="" if price is None else f"{price:.2f}")
+        price_entry = tk.Entry(frm, textvariable=price_var, width=12)
+        price_entry.grid(row=2, column=1, sticky="w", pady=4)
+
+        frm.columnconfigure(1, weight=1)
+
+        result = {"ok": False, "name": None, "category": None, "price": None}
+
+        def on_ok():
+            n = name_var.get().strip()
+            if not n:
+                messagebox.showerror(
+                    "Ошибка", "Название не должно быть пустым", parent=dlg
+                )
+                return
+
+            try:
+                p = float(price_var.get().replace(",", "."))
+                if p <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror(
+                    "Ошибка", "Цена должна быть числом > 0", parent=dlg
+                )
+                return
+
+            result["ok"] = True
+            result["name"] = n
+            result["category"] = cat_var.get()
+            result["price"] = p
+            dlg.destroy()
+
+        def on_cancel():
+            dlg.destroy()
+
+        btns = tk.Frame(frm)
+        btns.grid(row=3, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(btns, text="Отмена", command=on_cancel).pack(side=tk.RIGHT)
+        ttk.Button(btns, text="OK", command=on_ok).pack(side=tk.RIGHT, padx=(0, 8))
+
+        name_entry.focus_set()
+
+        dlg.update_idletasks()
+        parent = self.dialog
+        px, py = parent.winfo_rootx(), parent.winfo_rooty()
+        pw, ph = parent.winfo_width(), parent.winfo_height()
+        dw, dh = dlg.winfo_width(), dlg.winfo_height()
+        x = px + (pw - dw) // 2
+        y = py + (ph - dh) // 2
+        dlg.geometry(f"+{x}+{y}")
+
+        dlg.wait_window()
+        return result
