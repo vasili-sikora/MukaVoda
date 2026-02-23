@@ -5,10 +5,10 @@ from typing import List, Optional
 
 from database.database import DatabaseManager
 from database.models import Order, OrderItem
-from gui.child_form import ChildForm
+from gui.child_form import BaseForm
 
 
-class OrderForm(ChildForm):
+class OrderForm(BaseForm):
     def __init__(self, parent, order: Optional[Order] = None):
         super().__init__(parent)
 

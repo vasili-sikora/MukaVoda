@@ -1,14 +1,14 @@
 import tkinter as tk
-from datetime import datetime
 from tkinter import messagebox, ttk
 from typing import Optional
 
 from database.database import DatabaseManager
-from database.models import Order, OrderItem
+from database.models import Order
+from gui.child_form import BaseForm
 from gui.menu_form import MenuForm
 
 
-class MainWindow:
+class MainWindow(BaseForm):
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("MukaVoda")

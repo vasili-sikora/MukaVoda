@@ -1,7 +1,7 @@
 import tkinter as tk
 
 
-class ChildForm:
+class BaseForm:
     def __init__(self, parent):
         self.dialog = tk.Toplevel(parent)
 

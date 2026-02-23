@@ -1,13 +1,13 @@
 import sqlite3
 import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import messagebox, ttk
 
 from database.database import DatabaseManager
 from database.models import MenuItem
-from gui.child_form import ChildForm
+from gui.child_form import BaseForm
 
 
-class MenuForm(ChildForm):
+class MenuForm(BaseForm):
     CATEGORIES = ["Пицца", "Хот-дог", "Закуски", "Соусы", "Напитки"]
 
     def __init__(self, parent):
@@ -55,7 +55,6 @@ class MenuForm(ChildForm):
         self.menu_table.column("category", width=160, anchor="w")
         self.menu_table.column("price", width=90, anchor="e")
 
-        # Скроллбар
         y_scroll = ttk.Scrollbar(
             main_frame, orient="vertical", command=self.menu_table.yview
         )
