@@ -9,13 +9,20 @@ from gui.child_form import BaseForm
 
 
 class OrderForm(BaseForm):
-    def __init__(self, parent, order: Optional[Order] = None):
+    def __init__(
+        self, parent, db: DatabaseManager, order_service, order: Optional[Order] = None
+    ):
         super().__init__(parent)
+        self.db = db
+        self.order_service = order_service
 
-        self.db = DatabaseManager()
         self.result: Optional[Order] = None
         self.items: List[OrderItem] = []
         self.editing_order = order
+
+        # Состояние скидки/ручной суммы
+        self.discount_percent = 0.0
+        self.manual_total = None
 
         if order:
             self.dialog.title(f"Изменить заказ {order.order_number}")
@@ -26,6 +33,9 @@ class OrderForm(BaseForm):
 
         if order:
             self.load_order_data(order)
+
+        # чтобы итог сразу корректно отрисовался
+        self.update_items_display()
 
     def create_widgets(self):
         title_text = (
@@ -46,6 +56,7 @@ class OrderForm(BaseForm):
         main_frame = tk.Frame(self.dialog, padx=20, pady=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
+        # ---------------- LEFT: Menu tree ----------------
         left_frame = tk.Frame(main_frame)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
@@ -87,7 +98,6 @@ class OrderForm(BaseForm):
 
         self.load_menu_tree()
 
-        # Количество
         qty_frame = tk.Frame(left_frame)
         qty_frame.pack(fill=tk.X, pady=(10, 0))
 
@@ -109,6 +119,7 @@ class OrderForm(BaseForm):
         )
         self.btn_add_item.pack(fill=tk.X, pady=(15, 0))
 
+        # ---------------- RIGHT: Order items ----------------
         right_frame = tk.Frame(main_frame)
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
 
@@ -148,6 +159,40 @@ class OrderForm(BaseForm):
         )
         self.total_label.pack(pady=(15, 0))
 
+        # ===== СКИДКА =====
+        discount_frame = tk.Frame(right_frame)
+        discount_frame.pack(fill=tk.X, pady=(10, 0))
+
+        tk.Label(discount_frame, text="Скидка (%):").pack(anchor=tk.W)
+
+        self.discount_var = tk.StringVar(value="0")
+        self.discount_entry = tk.Entry(
+            discount_frame, textvariable=self.discount_var, width=10
+        )
+        self.discount_entry.pack(side=tk.LEFT)
+
+        tk.Button(
+            discount_frame, text="10%", command=self.apply_10_percent_discount
+        ).pack(side=tk.LEFT, padx=(5, 0))
+
+        # если вручную меняют скидку — пересчитать
+        self.discount_entry.bind("<KeyRelease>", self.on_discount_change)
+
+        # ===== РУЧНАЯ СУММА =====
+        manual_frame = tk.Frame(right_frame)
+        manual_frame.pack(fill=tk.X, pady=(5, 0))
+
+        tk.Label(manual_frame, text="Ручная сумма:").pack(anchor=tk.W)
+
+        self.manual_total_var = tk.StringVar()
+        self.manual_total_entry = tk.Entry(
+            manual_frame, textvariable=self.manual_total_var
+        )
+        self.manual_total_entry.pack(fill=tk.X)
+
+        self.manual_total_entry.bind("<KeyRelease>", self.on_manual_total_change)
+
+        # ---------------- Bottom: details + buttons ----------------
         bottom_container = tk.Frame(self.dialog, bg="#ecf0f1")
         bottom_container.pack(fill=tk.X, side=tk.BOTTOM)
 
@@ -202,7 +247,7 @@ class OrderForm(BaseForm):
 
         tk.Label(
             completion_frame,
-            text="Время выдачи (пусто = не выдан):",
+            text="Время выдачи:",
             font=("Arial", 10, "bold"),
             bg="#ecf0f1",
         ).pack(anchor=tk.W)
@@ -265,13 +310,15 @@ class OrderForm(BaseForm):
 
         self.items_listbox.bind("<<ListboxSelect>>", self.on_item_select)
 
+    # ---------------- helper actions ----------------
+
     def set_current_day(self):
-        current = datetime.now().strftime("%Y-%m-%d")
+        current = datetime.now().strftime("%Y-%m-%d %H:%M")
         self.completion_entry.delete(0, tk.END)
         self.completion_entry.insert(0, current)
 
     def set_tomorrow_day(self):
-        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M")
         self.completion_entry.delete(0, tk.END)
         self.completion_entry.insert(0, tomorrow)
 
@@ -282,16 +329,14 @@ class OrderForm(BaseForm):
             )
             return
 
-        mi = self.selected_menu  # это MenuItem из БД
+        mi = self.selected_menu
 
         try:
             quantity = int(self.qty_spinbox.get())
             if quantity <= 0:
                 raise ValueError
         except ValueError:
-            messagebox.showwarning(
-                "Неверное количество", "Количество должно быть положительным числом"
-            )
+            messagebox.showwarning("Неверное количество", "Количество должно быть > 0")
             return
 
         item = OrderItem(
@@ -317,63 +362,128 @@ class OrderForm(BaseForm):
             return
 
         index = selection[0]
-
         del self.items[index]
 
         self.update_items_display()
         if not self.items:
             self.btn_save.config(state=tk.DISABLED)
 
+    def on_item_select(self, event=None):
+        self.btn_remove_item.config(
+            state=tk.NORMAL if self.items_listbox.curselection() else tk.DISABLED
+        )
+
+    # ---------------- discount/manual ----------------
+
+    def on_discount_change(self, event=None):
+        # ручная сумма выключает скидку, но скидка НЕ должна выключать ручную сумму сама —
+        # мы это сделаем только когда пользователь реально поменял скидку
+        text = self.discount_var.get().strip()
+        try:
+            value = float(text.replace(",", ".") or 0)
+        except ValueError:
+            return
+
+        self.discount_percent = value
+        # если пользователь трогает скидку — отключаем ручную сумму
+        if self.manual_total is not None:
+            self.manual_total = None
+            self.manual_total_var.set("")
+
+        self.update_items_display()
+
+    def on_manual_total_change(self, event=None):
+        text = self.manual_total_var.get().strip()
+        if not text:
+            self.manual_total = None
+        else:
+            try:
+                self.manual_total = float(text.replace(",", "."))
+            except ValueError:
+                return
+
+        # ручная сумма отключает скидку
+        if self.manual_total is not None:
+            self.discount_percent = 0.0
+            self.discount_var.set("0")
+
+        self.update_items_display()
+
+    def apply_10_percent_discount(self):
+        self.discount_percent = 10.0
+        self.discount_var.set("10")
+
+        # скидка отключает ручную сумму
+        self.manual_total = None
+        self.manual_total_var.set("")
+
+        self.update_items_display()
+
+    # ---------------- calculations ----------------
+
     def update_items_display(self):
+        """Обновляет отображение позиций и итоговую сумму (с учетом скидки/ручной суммы)."""
         self.items_listbox.delete(0, tk.END)
-
         for item in self.items:
-            display_text = (
-                f"{item.name} x{item.quantity}  {item.calculate_total():.2f} BYN"
+            self.items_listbox.insert(
+                tk.END,
+                f"{item.name} x{item.quantity}  {item.calculate_total():.2f} BYN",
             )
-            self.items_listbox.insert(tk.END, display_text)
 
-        total = sum(item.calculate_total() for item in self.items)
+        items_total = self.order_service.calc_items_total(self.items)
+
+        # если в BaseForm нет self.run, замени на try/except или на свой run_safe
+        total = self.run(
+            lambda: self.order_service.calc_total(
+                items_total=items_total,
+                discount_percent=self.discount_percent,
+                manual_total=self.manual_total,
+            )
+        )
+        if total is None:
+            # если ошибка — просто показываем сумму позиций, чтобы UI не "прыгал"
+            total = items_total
+
         self.total_label.config(text=f"ИТОГО: {total:.2f} BYN")
 
-    def on_item_select(self, event):
-        """Обработчик выбора позиции в списке"""
-        if self.items_listbox.curselection():
-            self.btn_remove_item.config(state=tk.NORMAL)
-        else:
-            self.btn_remove_item.config(state=tk.DISABLED)
+    # ---------------- save/cancel ----------------
 
     def save(self):
         if not self.items:
-            messagebox.showwarning(
-                "Пустой заказ", "Добавьте хотя бы одну позицию в заказ"
-            )
+            messagebox.showwarning("Пустой заказ", "Добавьте хотя бы одну позицию")
             return
 
-        if not self.completion_entry.get():
-            messagebox.showwarning("Пустое время выдачи", "Введите время выдачи заказа")
+        completion_time = self.run(
+            lambda: self.order_service.validate_completion_time(
+                self.completion_entry.get()
+            )
+        )
+        if completion_time is None:
             return
 
         payment_method = self.payment_var.get()
+        address = self.address_entry.get().strip() or None
 
-        address = self.address_entry.get().strip()
-        delivery_address = address if address else None
-        completion_time = self.completion_entry.get().strip()
-        if completion_time:
-            try:
-                datetime.strptime(completion_time, "%Y-%m-%d %H:%M")
-            except ValueError:
-                messagebox.showerror(
-                    "Неверный формат",
-                    "Время выдачи должно быть в формате:\nЧЧ:ММ\n\nНапример: 15:30",
-                )
-                return
+        items_total = self.order_service.calc_items_total(self.items)
+        total = self.run(
+            lambda: self.order_service.calc_total(
+                items_total=items_total,
+                discount_percent=self.discount_percent,
+                manual_total=self.manual_total,
+            )
+        )
+        if total is None:
+            return
 
         if self.editing_order:
             self.editing_order.items = self.items.copy()
             self.editing_order.payment_method = payment_method
-            self.editing_order.delivery_adress = delivery_address
+            self.editing_order.delivery_adress = address
             self.editing_order.completed_at = completion_time
+            # сохраняем итог в объект (если модель/БД это использует)
+            setattr(self.editing_order, "total_price", total)
+            setattr(self.editing_order, "discount_percent", self.discount_percent)
+            setattr(self.editing_order, "manual_total", self.manual_total)
             self.result = self.editing_order
         else:
             order = Order(
@@ -383,8 +493,11 @@ class OrderForm(BaseForm):
                 created_at=None,
                 completed_at=completion_time,
                 payment_method=payment_method,
-                delivery_adress=delivery_address,
+                delivery_adress=address,
             )
+            setattr(order, "total_price", total)
+            setattr(order, "discount_percent", self.discount_percent)
+            setattr(order, "manual_total", self.manual_total)
             self.result = order
 
         self.dialog.destroy()
@@ -397,22 +510,19 @@ class OrderForm(BaseForm):
         self.dialog.wait_window()
         return self.result
 
+    # ---------------- load from DB/menu tree ----------------
+
     def load_order_data(self, order: Order):
         self.items = order.items.copy()
-        self.update_items_display()
 
-        # Загружаем способ оплаты
         self.payment_var.set(order.payment_method)
 
-        # Загружаем адрес
         if order.delivery_adress:
             self.address_entry.insert(0, order.delivery_adress)
 
-        # Загружаем время выдачи
         if order.completed_at:
             self.completion_entry.insert(0, order.completed_at)
 
-        # Активируем кнопку сохранения если есть позиции
         if self.items:
             self.btn_save.config(state=tk.NORMAL)
 

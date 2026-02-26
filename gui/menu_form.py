@@ -10,9 +10,9 @@ from gui.child_form import BaseForm
 class MenuForm(BaseForm):
     CATEGORIES = ["Пицца", "Хот-дог", "Закуски", "Соусы", "Напитки"]
 
-    def __init__(self, parent):
+    def __init__(self, parent, db: DatabaseManager):
         super().__init__(parent)
-        self.db = DatabaseManager()
+        self.db = db
         self.items: list[MenuItem] = []
 
         self.dialog.title("Просмотр меню")

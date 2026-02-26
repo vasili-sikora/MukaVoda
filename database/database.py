@@ -79,20 +79,24 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        total_price = getattr(order, "total_price", None)
+        if total_price is None:
+            total_price = order.calculate_total()
+
         cursor.execute(
             """
             INSERT INTO orders(
                 order_number, created_at, completed_at,
                 payment_method, delivery_adress, total_price
             ) VALUES (?, ?, ?, ?, ?, ?)
-        """,
+            """,
             (
                 order.order_number,
                 order.created_at,
                 order.completed_at,
                 order.payment_method,
                 order.delivery_adress,
-                order.calculate_total(),
+                float(total_price),
             ),
         )
 
@@ -104,7 +108,7 @@ class DatabaseManager:
                 INSERT INTO order_items (
                     order_id, item_name, category, quantity, price
                 ) VALUES (?, ?, ?, ?, ?)
-        """,
+                """,
                 (order_id, item.name, item.category, item.quantity, item.price),
             )
 
@@ -125,21 +129,20 @@ class DatabaseManager:
             return None
 
         cursor.execute(
-            """
-            SELECT * FROM order_items WHERE order_id=?""",
+            "SELECT * FROM order_items WHERE order_id=?",
             (order_id,),
         )
 
         items: list[OrderItem] = []
         for item_row in cursor.fetchall():
-            item = OrderItem(
-                name=item_row["item_name"],
-                category=item_row["category"],
-                quantity=item_row["quantity"],
-                price=item_row["price"],
+            items.append(
+                OrderItem(
+                    name=item_row["item_name"],
+                    category=item_row["category"],
+                    quantity=item_row["quantity"],
+                    price=item_row["price"],
+                )
             )
-
-            items.append(item)
 
         order = Order(
             order_id=row["id"],
@@ -150,6 +153,8 @@ class DatabaseManager:
             payment_method=row["payment_method"],
             delivery_adress=row["delivery_adress"],
         )
+
+        setattr(order, "total_price", row["total_price"])
 
         conn.close()
         print(f"Заказ {order.order_number} успешно загружен")
@@ -183,6 +188,12 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        # Берём итог, рассчитанный в GUI/сервисе (со скидкой/ручной суммой),
+        # иначе — считаем по позициям.
+        total_price = getattr(order, "total_price", None)
+        if total_price is None:
+            total_price = order.calculate_total()
+
         cursor.execute(
             """
             UPDATE orders SET
@@ -192,13 +203,13 @@ class DatabaseManager:
                 delivery_adress = ?,
                 total_price = ?
             WHERE id = ?
-        """,
+            """,
             (
                 order.order_number,
                 order.completed_at,
                 order.payment_method,
                 order.delivery_adress,
-                order.calculate_total(),
+                float(total_price),
                 order.order_id,
             ),
         )
@@ -206,6 +217,7 @@ class DatabaseManager:
         if cursor.rowcount == 0:
             conn.close()
             print("Не найдено заказов")
+            return
 
         cursor.execute("DELETE FROM order_items WHERE order_id = ?", (order.order_id,))
 
@@ -215,7 +227,7 @@ class DatabaseManager:
                 INSERT INTO order_items (
                     order_id, item_name, category, quantity, price
                 ) VALUES (?, ?, ?, ?, ?)
-        """,
+                """,
                 (order.order_id, item.name, item.category, item.quantity, item.price),
             )
 

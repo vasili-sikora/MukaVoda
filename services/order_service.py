@@ -26,3 +26,7 @@ class OrderService:
             if manual_total <= 0:
                 raise ValidationError("Цена должна быть больше 0")
             return round(float(manual_total), 2)
+
+        if not (0 <= discount_percent <= 100):
+            raise ValidationError("Скидка должна быть от 0 до 100%")
+        return round(items_total * (1 - discount_percent / 100), 2)

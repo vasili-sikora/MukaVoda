@@ -4,14 +4,14 @@ from typing import Optional
 
 from database.database import DatabaseManager
 from database.models import Order
-from gui.child_form import BaseForm
 from gui.menu_form import MenuForm
 
 
-class MainWindow(BaseForm):
-    def __init__(self, root: tk.Tk, db: DatabaseManager):
+class MainWindow:
+    def __init__(self, root: tk.Tk, db: DatabaseManager, order_service):
         self.root = root
         self.db = db
+        self.order_service = order_service
 
         self.root.title("MukaVoda")
         self.root.geometry("1280x720")
@@ -181,9 +181,9 @@ class MainWindow(BaseForm):
                     completion,
                     order.payment_method,
                     delivery,
-                    f"{order.calculate_total():.2f} BYN",
+                    f"{getattr(order, 'total_price', order.calculate_total()):.2f} BYN",
                 ),
-                tags=(str(order.order_id),),  # Сохраняем ID в тегах
+                tags=(str(order.order_id),),
             )
 
         self.update_revenue()
@@ -191,12 +191,10 @@ class MainWindow(BaseForm):
         self.status_label.config(text=f"Загружено заказов: {len(orders)}")
 
     def update_revenue(self):
-        """Обновляет отображение выручки за сегодня"""
         total = self.db.get_today_total()
         self.revenue_label.config(text=f"Выручка за сегодня: {total:.2f} BYN")
 
     def on_select(self, event):
-        """Обработчик выбора заказа в таблице"""
         selected = self.tree.selection()
 
         if selected:
@@ -214,10 +212,9 @@ class MainWindow(BaseForm):
             self.selected_order = None
 
     def create_order(self):
-        """Создает новый заказ"""
         from gui.order_form import OrderForm
 
-        form = OrderForm(self.root)
+        form = OrderForm(self.root, db=self.db, order_service=self.order_service)
         order = form.show()
 
         if order:
@@ -229,19 +226,23 @@ class MainWindow(BaseForm):
                 "Заказ создан",
                 f"Заказ {order.order_number} успешно создан!\n\n"
                 f"Позиций: {len(order.items)}\n"
-                f"Сумма: {order.calculate_total():.2f} BYN",
+                f"Сумма: {getattr(order, 'total_price', order.calculate_total()):.2f} BYN",
             )
 
             self.status_label.config(text=f"Создан заказ {order.order_number}")
 
     def edit_order(self):
-        """Открывает форму редактирования заказа"""
         if not self.selected_order:
             return
 
         from gui.order_form import OrderForm
 
-        form = OrderForm(self.root, order=self.selected_order)
+        form = OrderForm(
+            self.root,
+            db=self.db,
+            order_service=self.order_service,
+            order=self.selected_order,
+        )
         updated_order = form.show()
 
         if updated_order:
@@ -301,9 +302,12 @@ class MainWindow(BaseForm):
         for i, item in enumerate(self.selected_order.items, 1):
             details += f"  {i}. {item.name} x{item.quantity} - {item.calculate_total():.2f} BYN\n"
 
-        details += f"\nИТОГО: {self.selected_order.calculate_total():.2f} BYN"
+        total = getattr(
+            self.selected_order, "total_price", self.selected_order.calculate_total()
+        )
+        details += f"\nИТОГО: {total:.2f} BYN"
 
         messagebox.showinfo("Детали заказа", details)
 
     def show_menu(self):
-        menu_form = MenuForm(self.root)
+        MenuForm(self.root, db=self.db)
