@@ -8,9 +8,8 @@ class MenuItem:
     category: str
     price: float
 
-
-def __str__(self) -> str:
-    return f"{self.name}({self.category}): {self.price}"
+    def __str__(self) -> str:
+        return f"{self.name}({self.category}): {self.price}"
 
 
 @dataclass

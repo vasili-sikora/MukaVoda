@@ -9,21 +9,17 @@ from gui.menu_form import MenuForm
 
 
 class MainWindow(BaseForm):
-    def __init__(self, root: tk.Tk):
+    def __init__(self, root: tk.Tk, db: DatabaseManager):
         self.root = root
+        self.db = db
+
         self.root.title("MukaVoda")
         self.root.geometry("1280x720")
 
-        # База данных
-        self.db = DatabaseManager()
-
-        # Текущий выбранный заказ
         self.selected_order: Optional[Order] = None
 
-        # Создаем интерфейс
         self.create_widgets()
 
-        # Загружаем заказы
         self.refresh_orders()
 
     def create_widgets(self):
@@ -44,7 +40,6 @@ class MainWindow(BaseForm):
         button_frame.pack(fill=tk.X)
         button_frame.pack_propagate(False)
 
-        # Кнопка "Создать заказ"
         self.btn_create = tk.Button(
             button_frame,
             text="Создать заказ",
@@ -71,7 +66,6 @@ class MainWindow(BaseForm):
         )
         self.btn_edit.pack(side=tk.LEFT, padx=10, pady=15)
 
-        # Кнопка "Удалить заказ"
         self.btn_delete = tk.Button(
             button_frame,
             text="Удалить заказ",

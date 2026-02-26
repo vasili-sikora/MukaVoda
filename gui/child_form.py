@@ -1,4 +1,7 @@
 import tkinter as tk
+from tkinter import messagebox
+
+from services.errors import AppError
 
 
 class BaseForm:
@@ -20,3 +23,10 @@ class BaseForm:
         x = (self.dialog.winfo_screenwidth() // 2) - (width // 2)
         y = (self.dialog.winfo_screenheight() // 2) - (height // 2)
         self.dialog.geometry(f"{width}x{height}+{x}+{y}")
+
+    def run(self, func):
+        try:
+            return func()
+        except AppError as e:
+            messagebox.showerror("Ошибка", str(e), parent=self.dialog)
+            return None

@@ -1,12 +1,13 @@
 import tkinter as tk
 
+from database.database import DatabaseManager
 from gui.main_window import MainWindow
 
 
 def main():
     root = tk.Tk()
-
-    app = MainWindow(root)
+    db = DatabaseManager()
+    app = MainWindow(root, db=db)
 
     root.mainloop()
 
